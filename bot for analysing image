@@ -1,0 +1,150 @@
+import io
+import os
+import mysql.connector
+from PIL import Image
+import google.generativeai as genai
+from dotenv import load_dotenv
+import re
+
+# Load Environment Variables
+load_dotenv()
+
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Initialize Gemini AI
+genai.configure(api_key=GEMINI_API_KEY)
+
+# Extract Features using Gemini AI
+def extract_facial_features(image_bytes):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        image = Image.open(io.BytesIO(image_bytes))
+        image_blob = io.BytesIO()
+        image.save(image_blob, format="JPEG")
+
+        response = model.generate_content([
+            "Extract the following 25 facial and appearance attributes in this exact format:\n"
+            "Gender: [value]\n"
+            "Age Estimate: [value]\n"
+            "Ethnicity: [value]\n"
+            "Height: [value]\n"
+            "Weight: [value]\n"
+            "Face Shape: [value]\n"
+            "Skin Tone: [value]\n"
+            "Eye Color: [value]\n"
+            "Eyebrow Shape: [value]\n"
+            "Nose Shape: [value]\n"
+            "Lips Shape: [value]\n"
+            "Facial Hair: [value]\n"
+            "Hair Color: [value]\n"
+            "Hair Length: [value]\n"
+            "Hair Texture: [value]\n"
+            "Hair Style: [value]\n"
+            "Tattoos: [value]\n"
+            "Scars: [value]\n"
+            "Birthmarks: [value]\n"
+            "Piercings: [value]\n"
+            "Top Outerwear: [value]\n"
+            "Bottoms: [value]\n"
+            "Shoes: [value]\n"
+            "Accessories: [value]\n"
+            "Carrying Items: [value]\n"
+            "\nEnsure attributes are labeled exactly as above.",
+            {"mime_type": "image/jpeg", "data": image_blob.getvalue()}
+        ])
+
+        print("\n🔹 Raw Gemini AI Response:\n", response.text)
+
+        if not response.text:
+            return {"error": "No response from AI"}
+
+        return parse_features(response.text)
+    except Exception as e:
+        print("❌ Gemini AI Error:", e)
+        return {"error": "AI processing failed"}
+
+# Parse Features into Dictionary
+def parse_features(text):
+    attributes = [
+        "gender", "age_estimate", "ethnicity", "height", "weight", "face_shape", "skin_tone", 
+        "eye_color", "eyebrow_shape", "nose_shape", "lips_shape", "facial_hair", "hair_color", 
+        "hair_length", "hair_texture", "hair_style", "tattoos", "scars", "birthmarks", "piercings", 
+        "top_outerwear", "bottoms", "shoes", "accessories", "carrying_items"
+    ]
+
+    parsed_data = {attr: "Unknown" for attr in attributes}
+    
+    for line in text.split("\n"):
+        line = line.strip().replace("**", "").strip()
+        match = re.match(r"([\w\s]+):\s*(.+)", line)
+        if match:
+            key, value = match.groups()
+            key = key.lower().replace(" ", "_")
+            value = "Unknown" if not value.strip() or "Cannot be reliably determined" in value else value
+            if key in parsed_data:
+                parsed_data[key] = value
+
+    return parsed_data
+
+# Save Image & Features to MySQL
+def save_to_db(image_bytes, features):
+    try:
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        cursor = conn.cursor()
+
+        query = """
+        INSERT INTO images (image_data, gender, age_estimate, ethnicity, height, weight, face_shape, skin_tone, 
+                            eye_color, eyebrow_shape, nose_shape, lips_shape, facial_hair, hair_color, hair_length, 
+                            hair_texture, hair_style, tattoos, scars, birthmarks, piercings, top_outerwear, 
+                            bottoms, shoes, accessories, carrying_items)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        values = (
+            image_bytes, features["gender"], features["age_estimate"], features["ethnicity"],
+            features["height"], features["weight"], features["face_shape"], features["skin_tone"],
+            features["eye_color"], features["eyebrow_shape"], features["nose_shape"], features["lips_shape"],
+            features["facial_hair"], features["hair_color"], features["hair_length"], features["hair_texture"],
+            features["hair_style"], features["tattoos"], features["scars"], features["birthmarks"],
+            features["piercings"], features["top_outerwear"], features["bottoms"], features["shoes"],
+            features["accessories"], features["carrying_items"]
+        )
+        cursor.execute(query, values)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("✅ Image & features saved to MySQL.")
+    except Exception as e:
+        print("❌ Database Error:", e)
+
+# Process Image File (Main Function)
+def process_image(image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            image_bytes = image_file.read()
+        
+        print("🧠 Analyzing image... Please wait.")
+        extracted_features = extract_facial_features(image_bytes)
+        
+        if "error" not in extracted_features:
+            save_to_db(image_bytes, extracted_features)
+            print("\n✅ Extracted features:\n")
+            for k, v in extracted_features.items():
+                print(f"{k.replace('_', ' ')}: {v}")
+        else:
+            print("❌ Feature extraction failed:", extracted_features["error"])
+    except Exception as e:
+        print("❌ Error processing image:", e)
+
+# Example Usage
+if __name__ == '__main__':
+    image_path = " "  # Change this to the actual image path
+    process_image(image_path)
