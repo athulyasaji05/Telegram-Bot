@@ -1,0 +1,57 @@
+import mysql.connector
+
+# MySQL Database Connection
+DB_HOST = ""
+DB_USER = "vm"
+DB_PASSWORD = ""
+DB_NAME = ""
+
+def alter_table():
+    try:
+        conn = mysql.connector.connect(
+            host=DB_HOST,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME
+        )
+        cursor = conn.cursor()
+
+        # Alter table: Add new columns if they don't exist
+        cursor.execute("""
+        ALTER TABLE images
+        ADD COLUMN gender VARCHAR(20) NULL,
+        ADD COLUMN age_estimate VARCHAR(50) NULL,
+        ADD COLUMN ethnicity VARCHAR(50) NULL,
+        ADD COLUMN height VARCHAR(20) NULL,
+        ADD COLUMN weight VARCHAR(20) NULL,
+        ADD COLUMN face_shape VARCHAR(50) NULL,
+        ADD COLUMN skin_tone VARCHAR(50) NULL,
+        ADD COLUMN eye_color VARCHAR(50) NULL,
+        ADD COLUMN eyebrow_shape VARCHAR(50) NULL,
+        ADD COLUMN nose_shape VARCHAR(50) NULL,
+        ADD COLUMN lips_shape VARCHAR(50) NULL,
+        ADD COLUMN facial_hair VARCHAR(50) NULL,
+        ADD COLUMN hair_color VARCHAR(50) NULL,
+        ADD COLUMN hair_length VARCHAR(50) NULL,
+        ADD COLUMN hair_texture VARCHAR(50) NULL,
+        ADD COLUMN hair_style VARCHAR(50) NULL,
+        ADD COLUMN tattoos TEXT NULL,
+        ADD COLUMN scars TEXT NULL,
+        ADD COLUMN birthmarks TEXT NULL,
+        ADD COLUMN piercings TEXT NULL,
+        ADD COLUMN top_outerwear VARCHAR(100) NULL,
+        ADD COLUMN bottoms VARCHAR(100) NULL,
+        ADD COLUMN shoes VARCHAR(100) NULL,
+        ADD COLUMN accessories TEXT NULL,
+        ADD COLUMN carrying_items TEXT NULL;
+        """)
+
+        print("✅ Table 'images' successfully altered with new attributes!")
+
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print("❌ Error altering table:", e)
+
+# Run this function to update the table
+alter_table()
